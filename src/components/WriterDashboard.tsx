@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Manuscript, AccessRequest, PublisherOffer, DRMAuditLog } from "../types";
+import { Manuscript, AccessRequest, PublisherOffer, DRMAuditLog, AuthUser } from "../types";
 import {
   Shield,
   Lock,
@@ -38,6 +38,7 @@ import {
 import { formatCurrency } from "../utils/cryptoUtils";
 
 interface WriterDashboardProps {
+  currentUser?: AuthUser;
   manuscripts: Manuscript[];
   accessRequests: AccessRequest[];
   offers: PublisherOffer[];
@@ -52,6 +53,7 @@ interface WriterDashboardProps {
 }
 
 export const WriterDashboard: React.FC<WriterDashboardProps> = ({
+  currentUser,
   manuscripts,
   accessRequests,
   offers,
@@ -98,7 +100,7 @@ export const WriterDashboard: React.FC<WriterDashboardProps> = ({
               <span>Writer Secure Vault • लेखक डैशबोर्ड</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Welcome back, Bhoomi (भूमि सिंह)
+              Welcome back, {currentUser?.name || "Bhoomi (भूमि सिंह)"}
             </h1>
             <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-2xl">
               Your content is encrypted with AES-256 DRM. Publishers can only view watermarked previews with your explicit permission.
