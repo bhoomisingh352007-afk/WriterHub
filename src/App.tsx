@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { UserRole, AuthUser, Manuscript, AccessRequest, PublisherOffer, DRMAuditLog } from "./types";
+import React, { useState, useEffect } from "react";
+import { UserRole, AuthUser, Manuscript, AccessRequest, PublisherOffer, DRMAuditLog, Chapter } from "./types";
 import { INITIAL_MANUSCRIPTS, INITIAL_AUDIT_LOGS } from "./data/mockData";
 import { Header } from "./components/Header";
 import { WriterDashboard } from "./components/WriterDashboard";
@@ -7,22 +7,54 @@ import { PublisherMarketplace } from "./components/PublisherMarketplace";
 import { DRMAuditVault } from "./components/DRMAuditVault";
 import { SecureReaderModal } from "./components/SecureReaderModal";
 import { UploadScriptModal } from "./components/UploadScriptModal";
+import { AddChapterModal } from "./components/AddChapterModal";
 import { AIScriptAssistant } from "./components/AIScriptAssistant";
 import { AuthModal } from "./components/AuthModal";
+import { NotificationToast } from "./components/NotificationToast";
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<AuthUser>({
-    id: "usr-01",
-    name: "Bhoomi Singh (भूमि सिंह)",
-    email: "bhoomi.writer@writerhub.io",
-    role: "writer",
-    company: "WriterHub Screenwriter",
-    isVerifiedWriter: true,
-  });
+  // Load saved user or default to Bhoomi
+  const getInitialUser = (): AuthUser => {
+    try {
+      const saved = localStorage.getItem("writerhub_current_user");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return {
+      id: "usr-01",
+      name: "Bhoomi Singh (भूमि सिंह)",
+      email: "bhoomi.writer@writerhub.io",
+      role: "writer",
+      company: "WriterHub Screenwriter",
+      isVerifiedWriter: true,
+    };
+  };
 
-  const [currentRole, setCurrentRole] = useState<UserRole>("writer");
-  const [manuscripts, setManuscripts] = useState<Manuscript[]>(INITIAL_MANUSCRIPTS);
+  const getInitialManuscripts = (): Manuscript[] => {
+    try {
+      const saved = localStorage.getItem("writerhub_manuscripts");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return INITIAL_MANUSCRIPTS;
+  };
+
+  const [currentUser, setCurrentUser] = useState<AuthUser>(getInitialUser);
+  const [currentRole, setCurrentRole] = useState<UserRole>(currentUser.role || "writer");
+  const [manuscripts, setManuscripts] = useState<Manuscript[]>(getInitialManuscripts);
   const [auditLogs, setAuditLogs] = useState<DRMAuditLog[]>(INITIAL_AUDIT_LOGS);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Sync manuscripts to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("writerhub_manuscripts", JSON.stringify(manuscripts));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [manuscripts]);
 
   // Reader State
   const [selectedManuscript, setSelectedManuscript] = useState<Manuscript | null>(null);
@@ -30,6 +62,8 @@ export default function App() {
 
   // Modals
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
+  const [isAddChapterModalOpen, setIsAddChapterModalOpen] = useState<boolean>(false);
+  const [chapterTargetScript, setChapterTargetScript] = useState<Manuscript | null>(null);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
 
@@ -41,7 +75,11 @@ export default function App() {
 
   const handleRoleChange = (role: UserRole) => {
     setCurrentRole(role);
-    setCurrentUser((prev) => ({ ...prev, role }));
+    setCurrentUser((prev) => {
+      const updated = { ...prev, role };
+      localStorage.setItem("writerhub_current_user", JSON.stringify(updated));
+      return updated;
+    });
   };
 
   // Handlers
@@ -54,15 +92,25 @@ export default function App() {
     );
   };
 
+  const handleOpenAddChapterModal = (ms: Manuscript) => {
+    setChapterTargetScript(ms);
+    setIsAddChapterModalOpen(true);
+  };
+
   const handleAddManuscript = (newScript: Manuscript) => {
-    // Attach current user Bhoomi as author if uploading in writer mode
-    const customizedScript = {
+    // Attach current logged-in user as author
+    const customizedScript: Manuscript = {
       ...newScript,
       writerName: currentUser.name,
       writerEmail: currentUser.email,
+      drmConfig: {
+        ...newScript.drmConfig,
+        watermarkText: `CONFIDENTIAL PROPERTY OF ${currentUser.name.toUpperCase()} (WRITERHUB)`,
+      },
     };
 
     setManuscripts((prev) => [customizedScript, ...prev]);
+
     // Log DRM encryption event
     const newLog: DRMAuditLog = {
       id: `log-${Date.now()}`,
@@ -77,6 +125,31 @@ export default function App() {
       deviceInfo: "WriterHub DRM Engine",
     };
     setAuditLogs((prev) => [newLog, ...prev]);
+
+    // Toast Alert
+    setToastMessage(`🎉 Naya Content Add Ho Gaya: "${customizedScript.title}" is live!`);
+    setTimeout(() => setToastMessage(null), 5000);
+  };
+
+  const handleAddChapter = (manuscriptId: string, newChapter: Chapter) => {
+    setManuscripts((prev) =>
+      prev.map((m) => {
+        if (m.id === manuscriptId) {
+          const updatedChapters = [...(m.chapters || []), newChapter];
+          const newWordCount = m.wordCount + newChapter.wordCount;
+          return {
+            ...m,
+            chapters: updatedChapters,
+            wordCount: newWordCount,
+            updatedAt: new Date().toISOString().slice(0, 10),
+          };
+        }
+        return m;
+      })
+    );
+
+    setToastMessage(`🎉 Chapter Added: "${newChapter.title}" is live in Secure Reader!`);
+    setTimeout(() => setToastMessage(null), 5000);
   };
 
   const handleRequestAccess = (ms: Manuscript) => {
@@ -231,6 +304,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-purple-500 selection:text-slate-950">
+      {/* Toast Notification for New Content Updates */}
+      <NotificationToast
+        message={toastMessage}
+        onClose={() => setToastMessage(null)}
+      />
+
       {/* App Header */}
       <Header
         currentRole={currentRole}
@@ -251,6 +330,7 @@ export default function App() {
             offers={allOffers}
             auditLogs={auditLogs}
             onOpenUploadModal={() => setIsUploadModalOpen(true)}
+            onOpenAddChapterModal={handleOpenAddChapterModal}
             onOpenReader={handleOpenReader}
             onApproveRequest={handleApproveRequest}
             onRejectRequest={handleRejectRequest}
@@ -293,6 +373,14 @@ export default function App() {
         onAddManuscript={handleAddManuscript}
       />
 
+      {/* Add Chapter Modal */}
+      <AddChapterModal
+        isOpen={isAddChapterModalOpen}
+        onClose={() => setIsAddChapterModalOpen(false)}
+        manuscript={chapterTargetScript}
+        onAddChapter={handleAddChapter}
+      />
+
       {/* AI Script Assistant Modal */}
       <AIScriptAssistant
         isOpen={isAIAssistantOpen}
@@ -305,9 +393,12 @@ export default function App() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+        currentUser={currentUser}
         onLoginSuccess={(user) => {
           setCurrentUser(user);
           setCurrentRole(user.role);
+          setToastMessage(`Logged in as ${user.name} (${user.role})!`);
+          setTimeout(() => setToastMessage(null), 4000);
         }}
       />
     </div>

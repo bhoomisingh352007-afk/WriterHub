@@ -8,7 +8,7 @@ export const INITIAL_MANUSCRIPTS: Manuscript[] = [
     synopsis: "A gritty crime thriller set in the coal belts of Kashipur. An honest small-town sub-inspector discovers an encrypted ledger connecting political elites to illegal mining syndicates.",
     logline: "In a town where silence is bought in coal dust, one cop's encrypted notebook becomes the deadliest weapon in Uttar Pradesh.",
     genre: "Crime Thriller",
-    type: "Bollywood Feature Script",
+    type: "Screenplay",
     language: "Hindi",
     wordCount: 38500,
     writerId: "writer-01",
